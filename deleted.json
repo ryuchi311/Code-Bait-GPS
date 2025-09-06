@@ -1,0 +1,14 @@
+[
+  {
+    "lat": 51.5260591839111,
+    "lng": -0.24879290742950025,
+    "accuracy": 135,
+    "device": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0",
+      "isMobile": false
+    },
+    "timestamp": "2025-09-06T11:35:07.530Z",
+    "ip": "31.94.34.60",
+    "google_map_link": "https://www.google.com/maps/search/?api=1&query=51.5260591839111,-0.24879290742950025"
+  }
+]

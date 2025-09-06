@@ -1,0 +1,88 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Password Location</title>
+    <style>
+      /* make the map an in-flow block below the splash/header instead of fixed-bottom */
+      #map { width: 100%; height: 360px; border-top: 1px solid rgba(0,0,0,0.04); box-shadow: 0 -6px 18px rgba(2,6,23,0.04); }
+      @media (max-width:640px){ #map { height: 260px; } }
+      #info { position: absolute; left: 10px; top: 10px; z-index: 1000; background: rgba(255,255,255,0.9); padding:8px; border-radius:6px }
+      /* hide status box */
+      #info { display: none !important; }
+      /* loading overlay now sized to the map container via relative positioning */
+      #loadingOverlay { position: absolute; left: 0; right: 0; top: 0; height: 100%; background: rgba(255,255,255,0.9); z-index: 2000; display:flex; align-items:center; justify-content:center; flex-direction:column; }
+      .spinner { width:48px; height:48px; border-radius:50%; border:6px solid #ddd; border-top-color:#2b8cff; animation: spin 1s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .loading-text { margin-top:12px; color:#333; font-family:system-ui,Arial,sans-serif }
+      /* splash header shown at top; clicking records location */
+      #splashHeader{ display:block; width:100%; background: #f8f8f8; padding:10px 0; text-align:center; position:relative; z-index:3001; }
+      #splashHeader .splash-card{ display:inline-block; background: #fff; padding:6px; border-radius:8px; max-width:90%; box-shadow:0 4px 12px rgba(0,0,0,0.12); }
+      #splashHeader img{ max-width:100%; height:180px; object-fit:cover; border-radius:6px; display:block }
+      /* ensure splash image is fully opaque and not visually faded */
+      #splashHeader img{ opacity: 1 !important; filter: none !important; transition: none !important; -webkit-filter: none !important; }
+      /* make sure the splash sits above map overlays */
+      #splashHeader { z-index: 5000; }
+      #splashHeader .splash-text{ margin-top:8px; color:#111; font-weight:600 }
+      /* bottom position card (optional visual) kept but not fixed to avoid overlap) */
+      .pos-card{ position: relative; left: auto; transform: none; margin: 12px auto; bottom: auto; z-index: 4000; background: linear-gradient(180deg, #ffffffcc, #f7fbff); padding: 10px 14px; border-radius: 14px; box-shadow: 0 8px 30px rgba(30,50,80,0.12); display:flex; gap:12px; align-items:center; font-family: system-ui, Arial, sans-serif; min-width: 260px; max-width: calc(100% - 36px); }
+      .pos-card .coords{ font-size: 14px; color:#0b2540; font-weight:600 }
+      .pos-card .meta{ font-size:12px; color:#2b3b4b; opacity:0.85 }
+      .pos-card button.locate{ background:#2563eb; color:#fff; border:none; padding:8px 10px; border-radius:10px; cursor:pointer; font-weight:700 }
+      .pos-card button.locate:active{ transform:translateY(1px) }
+      /* hide meta text and locate button as requested */
+      .pos-card .meta { display: none !important; }
+      .pos-card .locate { display: none !important; }
+      @media (min-width:900px){ .pos-card{ min-width:340px } }
+    </style>
+    {% if google_key %}
+    <script src="https://maps.googleapis.com/maps/api/js?key={{ google_key }}"></script>
+    {% else %}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    {% endif %}
+  </head>
+  <body data-google="{{ '1' if google_key else '0' }}">
+    <div id="info">Status: <span id="status">starting</span></div>
+    <div id="map"></div>
+    <div id="loadingOverlay">
+      <div class="spinner" aria-hidden="true"></div>
+      <div class="loading-text">Loading map, awaiting location…</div>
+    </div>
+    <!-- bottom floating position card -->
+    <div class="pos-card" id="posCard" aria-live="polite">
+      <div>
+        <div class="coords" id="posCoords">—</div>
+        <div class="meta" id="posMeta">No location yet</div>
+      </div>
+      <div style="margin-left:auto">
+        <button class="locate" id="locateBtn">Locate</button>
+      </div>
+    </div>
+    <!-- splash shown on first open; clicking records location automatically -->
+    <div id="splashHeader">
+      <div class="splash-card">
+        <!-- prefer a local splash image placed at /static/splash.jpg; fallback to Unsplash if missing -->
+        <img id="splashImage" src="/static/splash.jpg" data-fallback="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=60" alt="Tap to record location" />
+        <div class="splash-text">Tap the image to record your location</div>
+      </div>
+    </div>
+  <!-- google availability is stored on body[data-google] to keep template tokens out of inline JS -->
+    <script src="/static/main.js"></script>
+    <script>
+      // If the local splash image isn't served (404), fall back to external image
+      document.addEventListener('DOMContentLoaded', function(){
+        try{
+          var img = document.getElementById('splashImage');
+          if(img){
+            img.addEventListener('error', function(){
+              var fb = img.getAttribute('data-fallback');
+              if(fb) img.src = fb;
+            });
+          }
+        }catch(e){}
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,30 @@
+{% for rec in data %}
+<tr class="pv-row hover:shadow-md" data-lat="{{ rec.lat if rec.lat is not none else '' }}" data-lng="{{ rec.lng if rec.lng is not none else '' }}">
+  {% if show_delete_controls %}
+  <td class="px-4 py-3 text-sm" style="width:48px"><input type="checkbox" class="record-chk" data-ts="{{ rec.timestamp if rec.timestamp else '' }}" /></td>
+  {% else %}
+  <td class="px-4 py-3 text-sm" style="width:48px"></td>
+  {% endif %}
+  <td class="px-4 py-3 text-sm" style="width:48px">{{ loop.index }}</td>
+  <td class="px-4 py-3 text-sm" style="width:170px"><span data-ts="{{ rec.timestamp if rec.timestamp is not none else '' }}" title="{{ rec._pretty_timestamp if rec._pretty_timestamp else '' }}">{{ rec._relative if rec._relative else (rec._pretty_timestamp if rec._pretty_timestamp else (rec.timestamp if rec.timestamp else '-')) }}</span></td>
+  <td class="px-4 py-3 text-sm coords" style="width:120px">{{ rec.lat if rec.lat is not none else '-' }}</td>
+  <td class="px-4 py-3 text-sm coords" style="width:120px">{{ rec.lng if rec.lng is not none else '-' }}</td>
+  <td class="px-4 py-3 text-sm" style="width:84px"><span class="badge-acc">{{ rec.accuracy if rec.accuracy is not none else '-' }}</span></td>
+  <td class="px-4 py-3 text-sm device-td" style="width:380px" title="{{ rec.device.userAgent if rec.device and rec.device.userAgent else '' }}">
+    <div class="flex items-center gap-2">
+      <div class="text-sm">{{ rec._os_icon if rec._os_icon else '' }} {{ rec._device_str if rec._device_str else (rec.device.userAgent[:80] if rec.device and rec.device.userAgent else '-') }}</div>
+    </div>
+    {% if rec.ip %}
+      <div class="text-xs text-slate-500 mt-1 coords" style="font-size:12px">{{ rec.ip }}</div>
+    {% endif %}
+  </td>
+  <td class="px-4 py-3 text-sm" style="width:160px">
+    <div class="flex items-center gap-2">
+  {% if rec.google_map_link %}<a href="{{ rec.google_map_link }}" target="_blank" class="action-btn" title="Open in Google Maps">Open</a>{% else %}-{% endif %}
+  {% if show_delete_controls %}
+    <button class="action-btn btn-delete-one" data-ts="{{ rec.timestamp if rec.timestamp else '' }}" title="Delete this record">Delete</button>
+  {% endif %}
+    </div>
+  </td>
+</tr>
+{% endfor %}

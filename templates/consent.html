@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Allow Location</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+  <div class="bg-white p-8 rounded-xl shadow-lg max-w-lg w-full text-center">
+    <h1 class="text-2xl font-semibold mb-4">Open PasswordVault Location</h1>
+    <p class="text-sm text-gray-600 mb-6">This application requires location access to display the PasswordVault Click the button below and allow location in your browser prompt.</p>
+    <div id="msg" class="text-sm text-red-600 mb-4" style="display:none"></div>
+    <button id="allowBtn" class="px-4 py-2 bg-indigo-600 text-white rounded-md font-semibold">Request Location PasswordVault</button>
+    <div class="mt-6 text-sm text-gray-500">If you deny permission, you can refresh from this page.</div>
+  </div>
+
+<script>
+(function(){
+  const btn = document.getElementById('allowBtn');
+  const msg = document.getElementById('msg');
+  function postAllowed(){
+    fetch('/allow_location', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' })
+      .then(()=>{ window.location.href = '/'; })
+      .catch(()=>{ window.location.href = '/'; });
+  }
+  btn.addEventListener('click', function(){
+    msg.style.display = 'none';
+    if(!navigator.geolocation){
+      msg.textContent = 'Geolocation is not supported by your browser.'; msg.style.display = 'block'; return;
+    }
+    navigator.geolocation.getCurrentPosition(function(pos){
+      // permission granted
+      postAllowed();
+    }, function(err){
+      // Permission denied or error
+      if(err && err.code === err.PERMISSION_DENIED){
+        msg.textContent = 'Permission denied. Please allow location in your browser settings or retry.';
+      } else {
+        msg.textContent = 'Unable to obtain location: ' + (err && err.message ? err.message : 'unknown');
+      }
+      msg.style.display = 'block';
+    }, { enableHighAccuracy: true, timeout: 7000 });
+  });
+})();
+</script>
+</body>
+</html>
